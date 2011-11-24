@@ -1,0 +1,103 @@
+<?php
+
+include('toulouse_notify.features.inc');
+
+/**
+ * Implements hook_node_insert().
+ */
+function toulouse_notify_node_insert($node) {
+  if ($node->type == 'post') {
+    toulouse_notify_post($node);
+  }
+}
+
+/**
+ * Notify on new post.
+ */
+function toulouse_notify_post($node) {
+  $wrapper = entity_metadata_wrapper('node', $node);
+
+  $arguments = array(
+    '@title' => $wrapper->label(),
+    '@author' => $wrapper->author->label(),
+    '@url' => $wrapper->url->value(),
+  );
+
+  toulouse_notify_deliever($arguments, $node);
+}
+
+/**
+ * Notify users via email.
+ */
+function toulouse_notify_deliever($arguments, $node) {
+  global $language;
+  $languages = language_list();
+  $arguments += array(
+    '@site-url' => url('', array('absolute' => TRUE)),
+    '@site-name' => variable_get('site_name', ''),
+  );
+
+	$wrapper = entity_metadata_wrapper('node', $node);
+
+	// Get all the group the node belongs to.
+	$gids = $wrapper->{OG_AUDIENCE_FIELD}->value(array('identifier' => TRUE));
+	if (!$gids) {
+	  return;
+	}
+
+	// Get all the users, that belong to the group.
+  $query = new EntityFieldQuery();
+  $result = $query
+    ->entityCondition('entity_type', 'og_membership')
+    ->propertyCondition('entity_type', 'user', '=')
+    ->propertyCondition('gid', $gids, 'IN')
+		->propertyCondition('state', OG_STATE_ACTIVE, '=')
+    ->execute();
+
+  if (empty($result['og_membership'])) {
+    return;
+  }
+
+  // Load all OG memberships.
+  foreach (array_keys($result['og_membership']) as $id) {
+    $wrapper = entity_metadata_wrapper('og_membership', $id);
+    $account = $wrapper->entity->value();
+    if ($account->uid == $node->uid) {
+      // Don't notify the node author.
+      continue;
+    }
+
+    $arguments['@name'] = format_username($account);
+
+    // Get one group that the user is associated with, and the post content
+    // as-well.
+    foreach ($wrapper->entity->og_membership->value() as $key => $og_membership) {
+      if ($og_membership->state != OG_STATE_ACTIVE) {
+        continue;
+      }
+      if (in_array($og_membership->gid, $gids)) {
+        $arguments['@group-title'] = $wrapper->entity->og_membership[$key]->group->label->value();
+        // We found the first group, so we can break.
+        break;
+      }
+    }
+
+    $message = message_create('email_group_content', array('arguments' => $arguments), $account);
+    $lang = !empty($account->language) && $account->language != LANGUAGE_NONE ? $languages[$account->language] : $languages[$language->language];
+    if ($result = drupal_mail('message_notify', $message->type, $account->mail, $lang, array ('message' => $message))) {
+      // Mail was sent successfully, so we don't save the message for later
+      // process.
+      continue;
+    }
+
+    // There was a problem with the email, so save the message.
+    watchdog('toulouse_notify', t('Could not send node subscribe email'));
+    $message->save();
+  }
+}
+
+
+
+function toulouse_notify_mail_alter($messages) {
+  dpm($messages);
+}

@@ -1,0 +1,8 @@
+core = "7.x"
+dependencies[] = "message"
+dependencies[] = "message_notify"
+description = "Handle mail notifications for groups"
+features[message_type][] = "email_group_content"
+name = "Toulouse notify"
+package = "Other"
+php = "5.2.4"
