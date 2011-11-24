@@ -37,21 +37,21 @@ function toulouse_notify_deliever($arguments, $node) {
     '@site-name' => variable_get('site_name', ''),
   );
 
-	$wrapper = entity_metadata_wrapper('node', $node);
+  $wrapper = entity_metadata_wrapper('node', $node);
 
-	// Get all the group the node belongs to.
-	$gids = $wrapper->{OG_AUDIENCE_FIELD}->value(array('identifier' => TRUE));
-	if (!$gids) {
-	  return;
-	}
+  // Get all the group the node belongs to.
+  $gids = $wrapper->{OG_AUDIENCE_FIELD}->value(array('identifier' => TRUE));
+  if (!$gids) {
+    return;
+  }
 
-	// Get all the users, that belong to the group.
+  // Get all the users, that belong to the group.
   $query = new EntityFieldQuery();
   $result = $query
     ->entityCondition('entity_type', 'og_membership')
     ->propertyCondition('entity_type', 'user', '=')
     ->propertyCondition('gid', $gids, 'IN')
-		->propertyCondition('state', OG_STATE_ACTIVE, '=')
+    ->propertyCondition('state', OG_STATE_ACTIVE, '=')
     ->execute();
 
   if (empty($result['og_membership'])) {
